@@ -1,14 +1,22 @@
-"""Supervisor that records every e-puck's pose to analysis/trajectories.csv.
+"""Supervisor that records robot poses to a CSV file.
 
-Writes one row per robot every 0.32 s of simulated time and stops after
-SIM_SECONDS, so a run produces the same amount of data each time.
+Logs every robot whose DEF name starts with EPUCK or is PIONEER, once every
+EVERY steps, for --seconds of simulated time. Then it pauses the simulation,
+or quits Webots if --quit=1 (used by tools/run_experiment.py).
+
+controllerArgs: "--seconds=120" "--out=analysis/trajectories.csv" "--quit=0"
 """
 import csv
 import math
 import os
+import sys
 from controller import Supervisor
 
-SIM_SECONDS = 120.0
+args = {"seconds": "120", "out": "analysis/trajectories.csv", "quit": "0"}
+for a in sys.argv[1:]:
+    k, _, v = a.lstrip("-").partition("=")
+    args[k] = v
+SIM_SECONDS = float(args["seconds"])
 EVERY = 10  # steps between samples
 
 sup = Supervisor()
@@ -19,9 +27,12 @@ i = 1
 while (node := sup.getFromDef(f"EPUCK{i}")) is not None:
     robots.append((f"e-puck{i}", node))
     i += 1
+if (node := sup.getFromDef("PIONEER")) is not None:
+    robots.append(("pioneer", node))
 
-out = os.path.join(os.path.dirname(__file__), "..", "..", "analysis", "trajectories.csv")
-out = os.path.abspath(out)
+root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+out = args["out"] if os.path.isabs(args["out"]) else os.path.join(root, args["out"])
+os.makedirs(os.path.dirname(out), exist_ok=True)
 with open(out, "w", newline="") as f:
     w = csv.writer(f)
     w.writerow(["t", "robot", "x", "y", "yaw"])
@@ -37,5 +48,9 @@ with open(out, "w", newline="") as f:
         if t >= SIM_SECONDS:
             f.flush()
             print(f"Logged {len(robots)} robots for {SIM_SECONDS:.0f} s -> {out}")
-            sup.simulationSetMode(Supervisor.SIMULATION_MODE_PAUSE)
             break
+
+if args["quit"] == "1":
+    sup.simulationQuit(0)
+else:
+    sup.simulationSetMode(Supervisor.SIMULATION_MODE_PAUSE)

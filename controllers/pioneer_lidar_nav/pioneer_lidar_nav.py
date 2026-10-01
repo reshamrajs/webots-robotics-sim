@@ -4,16 +4,36 @@ Every step the 180-beam scan is clipped to a look-ahead distance, a safety
 bubble is cut around the closest return, and the robot steers toward the
 middle of the widest remaining free gap. Forward speed falls with the nearest
 obstacle in front, so the robot slows down in tight spots.
+
+Parameters can be changed without editing this file: select the Pioneer in
+the Webots scene tree and add entries to `controllerArgs`, e.g.
+"--lookahead=4" "--bubble=0.3". Defaults are in PARAMS below.
 """
 import math
+import sys
 from controller import Robot
+
+PARAMS = {
+    "lookahead": 2.5,  # m, beams beyond this count as free
+    "free": 1.0,       # m, a beam longer than this is part of a gap
+    "bubble": 0.45,    # m, safety radius cut around the closest return
+    "stop": 0.35,      # m, stop driving forward (turn only) below this
+    "max_v": 0.6,      # m/s, top forward speed
+    "slow": 0.35,      # forward speed = slow * front distance, capped at max_v
+    "k_turn": 2.0,     # turn rate per radian of heading error
+    "max_w": 1.5,      # rad/s, turn-rate limit
+}
+for a in sys.argv[1:]:
+    k, _, v = a.lstrip("-").partition("=")
+    if k in PARAMS:
+        PARAMS[k] = float(v)
 
 MAX_SPEED = 12.3        # rad/s, wheel limit from the PROTO
 WHEEL_RADIUS = 0.0975   # m
 AXLE = 0.33             # m, wheel separation
-LOOKAHEAD = 2.5         # m, beams beyond this count as free
-BUBBLE = 0.45           # m, safety radius around the closest return
-STOP_DIST = 0.35        # m, rotate in place below this
+LOOKAHEAD = PARAMS["lookahead"]
+BUBBLE = PARAMS["bubble"]
+STOP_DIST = PARAMS["stop"]
 
 robot = Robot()
 dt = int(robot.getBasicTimeStep())
@@ -52,7 +72,7 @@ while robot.step(dt) != -1:
 
     k = min(range(n), key=r.__getitem__)
     dmin = r[k]
-    free = [d > 1.0 for d in r]
+    free = [d > PARAMS["free"] for d in r]
     if dmin < LOOKAHEAD:
         # Angular half-width of the safety bubble at the closest obstacle.
         half = math.atan2(BUBBLE, max(dmin, 1e-3))
@@ -69,8 +89,8 @@ while robot.step(dt) != -1:
         target = math.pi / 2  # boxed in: turn left
 
     front = min(r[n // 3: 2 * n // 3])
-    v = 0.0 if front < STOP_DIST else min(0.6, 0.35 * front)   # m/s
-    w = max(-1.5, min(1.5, 2.0 * target))                       # rad/s
+    v = 0.0 if front < STOP_DIST else min(PARAMS["max_v"], PARAMS["slow"] * front)  # m/s
+    w = max(-PARAMS["max_w"], min(PARAMS["max_w"], PARAMS["k_turn"] * target))  # rad/s
 
     wl = (v - w * AXLE / 2) / WHEEL_RADIUS
     wr = (v + w * AXLE / 2) / WHEEL_RADIUS

@@ -95,3 +95,9 @@ DEF PIONEER Pioneer3dx {
     }
   ]
 }
+Robot {
+  name "logger"
+  supervisor TRUE
+  controller "trajectory_logger"
+  controllerArgs [ "--seconds=180" "--out=analysis/pioneer_trajectory.csv" ]
+}
